@@ -45,7 +45,7 @@ export default function AnalysisPage() {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [form, setForm] = useState<AnalysisInput & { sourceUnit: string; threadCount: string; fiberLength: string; location: string; notes: string }>({
     materialType: '', wasteCategory: wasteCategories[0], weightKg: 100, color: '', moisturePct: 6,
-    contaminationPct: 5, fiberType: fiberTypes[0], provenance: provenanceLevels[0] as ProvenanceLevel,
+    contaminationPct: 5, fiberType: '', provenance: '' as ProvenanceLevel,
     sourceUnit: '', threadCount: '', fiberLength: '', location: '', notes: '',
   });
   const [status, setStatus] = useState<'idle' | 'scanning' | 'done'>('idle');
@@ -67,6 +67,14 @@ export default function AnalysisPage() {
     e.preventDefault();
     if (!form.materialType || !imagePreview) {
       show('Add a batch photo and material type before scanning.', 'info');
+      return;
+    }
+    if (!form.fiberType || !fiberTypes.includes(form.fiberType)) {
+      show('Select the actual fiber type before scanning — this drives the grading.', 'info');
+      return;
+    }
+    if (!form.provenance || !provenanceLevels.includes(form.provenance)) {
+      show('Select the batch provenance before scanning — this drives the grading.', 'info');
       return;
     }
     setStatus('scanning');
@@ -119,8 +127,8 @@ export default function AnalysisPage() {
             <form onSubmit={runAnalysis} className="grid grid-cols-2 gap-3.5">
               <TextField label="Material type" value={form.materialType} onChange={(v) => update('materialType', v)} placeholder="e.g. Cotton Cutting Scrap" full />
               <SelectField label="Waste category" value={form.wasteCategory} onChange={(v) => update('wasteCategory', v)} options={wasteCategories} />
-              <SelectField label="Fiber type" value={form.fiberType ?? fiberTypes[0]} onChange={(v) => update('fiberType', v)} options={fiberTypes} />
-              <SelectField label="Provenance" value={form.provenance ?? provenanceLevels[0]} onChange={(v) => update('provenance', v as ProvenanceLevel)} options={provenanceLevels} />
+<SelectField label="Fiber type" value={form.fiberType ?? ''} onChange={(v) => update('fiberType', v)} options={['Select fiber type…', ...fiberTypes]} />
+              <SelectField label="Provenance" value={form.provenance ?? ''} onChange={(v) => update('provenance', v as ProvenanceLevel)} options={['Select provenance…', ...provenanceLevels]} />
               <NumberField label="Weight (kg)" value={form.weightKg} onChange={(v) => update('weightKg', v)} />
               <TextField label="Source unit" value={form.sourceUnit} onChange={(v) => update('sourceUnit', v)} placeholder="Cutting Floor 2" />
               <TextField label="Color" value={form.color} onChange={(v) => update('color', v)} placeholder="Indigo Mix" />
