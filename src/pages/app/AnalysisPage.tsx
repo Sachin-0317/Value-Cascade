@@ -5,6 +5,7 @@ import { PageHeader, Panel, PrimaryButton, SecondaryButton } from '@/components/
 import { analysisService, type AnalysisInput, type HfcfAnalysisResult } from '@/services/analysisService';
 import { FIBER_ACCEPTANCE, PROVENANCE_LEVELS, type ProvenanceLevel } from '@/data/recoveryRules';
 import { useBatches } from '@/store/BatchContext';
+import { classifyImage, summarizeTextileRelevance, type NeuralPrediction } from '@/services/visionModel';
 import { useToast } from '@/components/Toast';
 
 const wasteCategories = ['Cutting Scrap', 'Selvedge', 'Yarn Waste', 'Fabric Rejects', 'Sludge', 'Dust & Fly', 'Rags', 'Post-Consumer'];
@@ -86,6 +87,8 @@ export default function AnalysisPage() {
   const { addBatch } = useBatches();
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [visualStats, setVisualStats] = useState<VisualStats | null>(null);
+  const [neuralPredictions, setNeuralPredictions] = useState<NeuralPrediction[] | null>(null);
+  const [neuralLoading, setNeuralLoading] = useState(false);
   const [form, setForm] = useState<AnalysisInput & { sourceUnit: string; threadCount: string; fiberLength: string; location: string; notes: string }>({
     materialType: '', wasteCategory: wasteCategories[0], weightKg: 100, color: '', moisturePct: 6,
     contaminationPct: 5, fiberType: '', provenance: '' as ProvenanceLevel,
@@ -105,6 +108,19 @@ export default function AnalysisPage() {
     const { dataUrl, stats } = await toResizedDataUrl(file);
     setImagePreview(dataUrl);
     setVisualStats(stats);
+    setNeuralPredictions(null);
+    setNeuralLoading(true);
+    try {
+      const img = new Image();
+      img.src = dataUrl;
+      await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject; });
+      const predictions = await classifyImage(img);
+      setNeuralPredictions(predictions);
+    } catch {
+      setNeuralPredictions([]);
+    } finally {
+      setNeuralLoading(false);
+    }
   }
 
   async function runAnalysis(e: React.FormEvent) {
@@ -157,6 +173,23 @@ export default function AnalysisPage() {
               )}
               <input type="file" accept="image/*" className="hidden" onChange={handleFile} />
             </label>
+
+            {neuralLoading && (
+              <div className="mt-3 flex items-center gap-2 text-[12px] text-amber">
+                <ScanLine size={14} className="animate-pulse" /> Running MobileNet neural network inference on photo…
+              </div>
+            )}
+            {!neuralLoading && neuralPredictions && neuralPredictions.length > 0 && (
+              <div className="mt-3 rounded-lg border border-line bg-white/[0.03] px-3.5 py-2.5">
+                <div className="mb-1.5 text-[11px] uppercase tracking-wide text-stone">Neural Network Top Matches</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {neuralPredictions.slice(0, 3).map((p) => (
+                    <span key={p.className} className="rounded-full border border-line bg-white/[0.03] px-2.5 py-1 text-[11px] text-bone">{p.className} · {p.probability}%</span>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {status === 'scanning' && (
               <div className="mt-4 space-y-2 rounded-lg border border-amber/25 bg-amber/[0.06] p-3.5">
                 <div className="flex items-center gap-2 text-[13px] text-amber"><ScanLine size={15} className="animate-pulse" /> {scanSteps[scanStep]}…</div>
@@ -231,6 +264,17 @@ export default function AnalysisPage() {
                 <span className="font-medium">Visual Cross-Check ({result.hfcf.visualCheck.visualContaminationEstimatePct}% estimated):</span> {result.hfcf.visualCheck.note}
               </div>
             )}
+
+            {neuralPredictions && neuralPredictions.length > 0 && (() => {
+              const relevance = summarizeTextileRelevance(neuralPredictions);
+              return (
+                <div className={`mt-3 rounded-lg border px-3.5 py-2.5 text-[12px] ${relevance.relevant ? 'border-sage/30 bg-sage/[0.06] text-sage' : 'border-line-strong bg-white/[0.03] text-stone'}`}>
+                  <span className="font-medium">Neural Network (MobileNet):</span> {relevance.note}
+                </div>
+              );
+            })()}
+
+            <div className="mt-4 grid grid-cols-2 gap-3">
 
             <div className="mt-4 grid grid-cols-2 gap-3">
               <ResultTile label="CO₂ Saved" value={`${result.co2SavedKg} kg`} />
