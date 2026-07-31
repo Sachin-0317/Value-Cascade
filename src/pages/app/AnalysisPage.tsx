@@ -2,34 +2,65 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ScanLine, Upload } from 'lucide-react';
 import { PageHeader, Panel, PrimaryButton, SecondaryButton } from '@/components/ui';
-import { analysisService, type AnalysisInput } from '@/services/analysisService';
-import type { AnalysisResult } from '@/types';
+import { analysisService, type AnalysisInput, type HfcfAnalysisResult } from '@/services/analysisService';
+import { FIBER_ACCEPTANCE, PROVENANCE_LEVELS, type ProvenanceLevel } from '@/data/recoveryRules';
+import { useBatches } from '@/store/BatchContext';
 import { useToast } from '@/components/Toast';
 
 const wasteCategories = ['Cutting Scrap', 'Selvedge', 'Yarn Waste', 'Fabric Rejects', 'Sludge', 'Dust & Fly', 'Rags', 'Post-Consumer'];
+const fiberTypes = FIBER_ACCEPTANCE.map((f) => f.fiberType);
+const provenanceLevels = PROVENANCE_LEVELS.map((p) => p.level);
 
 const scanSteps = ['Reading image metadata', 'Segmenting material regions', 'Classifying fiber composition', 'Scoring contamination & moisture', 'Estimating recoverable value'];
+
+/** Downscales an uploaded image and returns it as a base64 data URL — small enough
+ *  for localStorage, and (unlike URL.createObjectURL) still valid after a page reload. */
+function toResizedDataUrl(file: File, maxWidth = 480, quality = 0.72): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Could not read file'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Could not load image'));
+      img.onload = () => {
+        const scale = Math.min(1, maxWidth / img.width);
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return reject(new Error('Canvas not supported'));
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
+}
 
 export default function AnalysisPage() {
   const { show } = useToast();
   const navigate = useNavigate();
+  const { addBatch } = useBatches();
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [form, setForm] = useState<AnalysisInput & { sourceUnit: string; threadCount: string; fiberLength: string; location: string; notes: string }>({
     materialType: '', wasteCategory: wasteCategories[0], weightKg: 100, color: '', moisturePct: 6,
-    contaminationPct: 5, sourceUnit: '', threadCount: '', fiberLength: '', location: '', notes: '',
+    contaminationPct: 5, fiberType: fiberTypes[0], provenance: provenanceLevels[0] as ProvenanceLevel,
+    sourceUnit: '', threadCount: '', fiberLength: '', location: '', notes: '',
   });
   const [status, setStatus] = useState<'idle' | 'scanning' | 'done'>('idle');
   const [scanStep, setScanStep] = useState(0);
-  const [result, setResult] = useState<AnalysisResult | null>(null);
+  const [result, setResult] = useState<HfcfAnalysisResult | null>(null);
 
   function update<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
     setForm((f) => ({ ...f, [key]: value }));
   }
 
-  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    setImagePreview(URL.createObjectURL(file));
+    const dataUrl = await toResizedDataUrl(file);
+    setImagePreview(dataUrl);
   }
 
   async function runAnalysis(e: React.FormEvent) {
@@ -41,7 +72,7 @@ export default function AnalysisPage() {
     setStatus('scanning');
     setScanStep(0);
     const stepTimer = setInterval(() => setScanStep((s) => Math.min(s + 1, scanSteps.length - 1)), 420);
-    const res = await analysisService.analyze(form);
+    const res = await analysisService.analyze({ ...form, fiberLengthMm: Number(form.fiberLength) || undefined });
     clearInterval(stepTimer);
     setResult(res);
     setStatus('done');
@@ -88,6 +119,8 @@ export default function AnalysisPage() {
             <form onSubmit={runAnalysis} className="grid grid-cols-2 gap-3.5">
               <TextField label="Material type" value={form.materialType} onChange={(v) => update('materialType', v)} placeholder="e.g. Cotton Cutting Scrap" full />
               <SelectField label="Waste category" value={form.wasteCategory} onChange={(v) => update('wasteCategory', v)} options={wasteCategories} />
+              <SelectField label="Fiber type" value={form.fiberType ?? fiberTypes[0]} onChange={(v) => update('fiberType', v)} options={fiberTypes} />
+              <SelectField label="Provenance" value={form.provenance ?? provenanceLevels[0]} onChange={(v) => update('provenance', v as ProvenanceLevel)} options={provenanceLevels} />
               <NumberField label="Weight (kg)" value={form.weightKg} onChange={(v) => update('weightKg', v)} />
               <TextField label="Source unit" value={form.sourceUnit} onChange={(v) => update('sourceUnit', v)} placeholder="Cutting Floor 2" />
               <TextField label="Color" value={form.color} onChange={(v) => update('color', v)} placeholder="Indigo Mix" />
@@ -130,8 +163,13 @@ export default function AnalysisPage() {
           </Panel>
 
           <Panel>
-            <div className="mb-1 inline-flex items-center rounded-full border border-amber/30 bg-amber/10 px-3 py-1 text-xs font-medium text-amber">
-              Recommended: {result.recommendedRoute}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="inline-flex items-center rounded-full border border-amber/30 bg-amber/10 px-3 py-1 text-xs font-medium text-amber">
+                Recommended: {result.recommendedRoute}
+              </div>
+              <div className="inline-flex items-center rounded-full border border-line-strong bg-white/[0.03] px-3 py-1 text-xs font-medium text-bone">
+                HFCF Grade: {result.hfcf.finalGrade}
+              </div>
             </div>
             <p className="mt-3 text-[13px] leading-relaxed text-stone">{result.reasoning}</p>
 
@@ -139,6 +177,27 @@ export default function AnalysisPage() {
               <ResultTile label="CO₂ Saved" value={`${result.co2SavedKg} kg`} />
               <ResultTile label="Water Saved" value={`${result.waterSavedL.toLocaleString('en-IN')} L`} />
             </div>
+
+            <h4 className="mb-2 mt-5 text-[13px] text-stone">Recovery Pathway — {result.hfcf.pathway}</h4>
+            <div className="space-y-2">
+              {result.hfcf.hubs.map((h) => (
+                <div key={h.name} className="rounded-lg border border-line bg-white/[0.03] px-3.5 py-2.5">
+                  <div className="text-[13px] text-bone">{h.name} <span className="text-stone">· {h.region}</span></div>
+                  <div className="mt-0.5 text-[12px] text-stone">{h.keyFacts}</div>
+                </div>
+              ))}
+            </div>
+
+            {result.hfcf.productSuggestions.length > 0 && (
+              <>
+                <h4 className="mb-2 mt-5 text-[13px] text-stone">Suggested Products from this Batch</h4>
+                <div className="flex flex-wrap gap-2">
+                  {result.hfcf.productSuggestions.map((p) => (
+                    <span key={p.product} className="rounded-full border border-line bg-white/[0.03] px-3 py-1 text-[12px] text-bone">{p.product}</span>
+                  ))}
+                </div>
+              </>
+            )}
 
             <h4 className="mb-2 mt-5 text-[13px] text-stone">Composition</h4>
             <div className="space-y-2">
@@ -151,7 +210,22 @@ export default function AnalysisPage() {
             </div>
 
             <div className="mt-6 flex flex-wrap gap-2">
-              <PrimaryButton onClick={() => { show('Batch saved to inventory as Ready for Sale.'); navigate('/app/inventory'); }}>Save to Inventory</PrimaryButton>
+              <PrimaryButton
+                onClick={() => {
+                  addBatch({
+                    materialType: form.materialType,
+                    wasteCategory: form.wasteCategory,
+                    weightKg: form.weightKg,
+                    location: form.location,
+                    imageUrl: imagePreview,
+                    analysis: result,
+                  });
+                  show('Batch saved to inventory as Ready for Sale.');
+                  navigate('/app/inventory');
+                }}
+              >
+                Save to Inventory
+              </PrimaryButton>
               <SecondaryButton onClick={() => { show('Listing draft created from this batch.'); navigate('/app/listings'); }}>Create Listing</SecondaryButton>
               <SecondaryButton onClick={() => show('Report generated — available in Reports.')}>Generate Report</SecondaryButton>
               <SecondaryButton onClick={reset}>Scan Another Batch</SecondaryButton>

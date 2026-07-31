@@ -1,5 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider } from '@/store/AuthContext';
+import { BatchProvider } from '@/store/BatchContext';
+import { ListingProvider } from '@/store/ListingContext';
 import { ToastProvider } from '@/components/Toast';
 import { ProtectedRoute } from '@/app/ProtectedRoute';
 import { AppShellLayout } from '@/layouts/AppShellLayout';
@@ -31,6 +33,8 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <BatchProvider>
+        <ListingProvider>
         <ToastProvider>
         <Routes>
           <Route path="/" element={<LandingPage />} />
@@ -83,6 +87,8 @@ export default function App() {
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
         </ToastProvider>
+        </ListingProvider>
+        </BatchProvider>
       </AuthProvider>
     </BrowserRouter>
   );

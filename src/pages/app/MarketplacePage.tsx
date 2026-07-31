@@ -1,22 +1,23 @@
 import { useMemo, useState } from 'react';
 import { Search, MapPin, ShieldCheck } from 'lucide-react';
 import { PageHeader, Panel, PrimaryButton, SecondaryButton, EmptyState } from '@/components/ui';
-import { mockListings } from '@/data/mockWorkflow';
+import { useListings } from '@/store/ListingContext';
 import { useToast } from '@/components/Toast';
 
 export default function MarketplacePage() {
   const { show } = useToast();
+  const { listings: allListings } = useListings();
   const [query, setQuery] = useState('');
   const [maxPrice, setMaxPrice] = useState(100);
   const [minQuality, setMinQuality] = useState(0);
 
   const listings = useMemo(
     () =>
-      mockListings
+      allListings
         .filter((l) => l.status === 'Published')
         .filter((l) => l.title.toLowerCase().includes(query.toLowerCase()) || l.material.toLowerCase().includes(query.toLowerCase()))
         .filter((l) => l.pricePerKgInr <= maxPrice && l.qualityScore >= minQuality),
-    [query, maxPrice, minQuality]
+    [allListings, query, maxPrice, minQuality]
   );
 
   return (
@@ -47,7 +48,6 @@ export default function MarketplacePage() {
               <Panel key={l.id} className="flex flex-col">
                 <div className="mb-2 flex items-start justify-between gap-2">
                   <h3 className="text-[14px] leading-snug text-bone">{l.title}</h3>
-                  {l.matchScore && <span className="shrink-0 rounded-full border border-sage/30 bg-sage/10 px-2 py-0.5 text-[11px] text-sage">{l.matchScore}% match</span>}
                 </div>
                 <p className="text-[12px] text-stone">{l.material}</p>
                 <div className="my-3 flex items-center gap-3 text-[11px] text-stone">

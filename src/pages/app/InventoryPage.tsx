@@ -1,24 +1,67 @@
 import { useMemo, useState } from 'react';
 import { LayoutGrid, List, Search } from 'lucide-react';
-import { PageHeader, Panel, StatusBadge, SecondaryButton, EmptyState } from '@/components/ui';
+import { PageHeader, Panel, StatusBadge, SecondaryButton, PrimaryButton, EmptyState } from '@/components/ui';
 import { mockBatches, mockInventory } from '@/data/mockWorkflow';
+import { useBatches, type BatchStatus } from '@/store/BatchContext';
 import { useToast } from '@/components/Toast';
 import type { InventoryStatus } from '@/types';
+import { NewListingModal } from './ListingsPage';
 
 const statuses: (InventoryStatus | 'All')[] = ['All', 'Draft', 'Pending Analysis', 'Analyzed', 'Respinnable', 'Ready for Sale', 'Listed', 'Reserved', 'In Transit', 'Sold', 'Recycled', 'Rejected'];
+const LISTABLE: BatchStatus[] = ['Ready for Sale'];
+
+interface InventoryRow {
+  id: string;
+  code: string;
+  materialType: string;
+  imageUrl: string | null;
+  quantityKg: number;
+  storageLocation: string;
+  status: InventoryStatus;
+  contaminationLabel: string;
+  scannedBatchId: string | null;
+}
 
 export default function InventoryPage() {
   const { show } = useToast();
+  const { batches } = useBatches();
   const [view, setView] = useState<'card' | 'table'>('card');
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState<(typeof statuses)[number]>('All');
+  const [listingBatchId, setListingBatchId] = useState<string | null>(null);
 
-  const rows = useMemo(() => {
-    return mockInventory
-      .map((item) => ({ item, batch: mockBatches.find((b) => b.id === item.batchId)! }))
-      .filter(({ batch }) => batch.materialType.toLowerCase().includes(query.toLowerCase()) || batch.code.toLowerCase().includes(query.toLowerCase()))
-      .filter(({ item }) => status === 'All' || item.status === status);
-  }, [query, status]);
+  const rows = useMemo<InventoryRow[]>(() => {
+    const scannedRows: InventoryRow[] = batches.map((b) => ({
+      id: b.id,
+      code: b.code,
+      materialType: b.materialType || b.analysis.detectedFiber,
+      imageUrl: b.imageUrl,
+      quantityKg: b.weightKg,
+      storageLocation: b.location || 'Unassigned',
+      status: b.status,
+      contaminationLabel: `${b.analysis.contaminationGrade} (Grade ${b.analysis.hfcf.finalGrade})`,
+      scannedBatchId: b.id,
+    }));
+
+    const mockRows: InventoryRow[] = mockInventory.map((item) => {
+      const batch = mockBatches.find((b) => b.id === item.batchId)!;
+      return {
+        id: item.id,
+        code: batch.code,
+        materialType: batch.materialType,
+        imageUrl: batch.imageUrl,
+        quantityKg: item.quantityKg,
+        storageLocation: item.storageLocation,
+        status: item.status,
+        contaminationLabel: `${batch.contaminationPct}%`,
+        scannedBatchId: null,
+      };
+    });
+
+    return [...scannedRows, ...mockRows]
+      .filter((r) => r.materialType.toLowerCase().includes(query.toLowerCase()) || r.code.toLowerCase().includes(query.toLowerCase()))
+      .filter((r) => status === 'All' || r.status === status);
+  }, [batches, query, status]);
 
   return (
     <div>
@@ -48,22 +91,31 @@ export default function InventoryPage() {
         <EmptyState title="No batches match your filters" description="Try clearing the search or status filter, or upload a new batch for analysis." />
       ) : view === 'card' ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {rows.map(({ item, batch }) => (
-            <Panel key={item.id}>
-              <img src={batch.imageUrl} alt={batch.materialType} className="mb-3 h-32 w-full rounded-lg object-cover" />
+          {rows.map((row) => (
+            <Panel key={row.id}>
+              {row.imageUrl ? (
+                <img src={row.imageUrl} alt={row.materialType} className="mb-3 h-32 w-full rounded-lg object-cover" />
+              ) : (
+                <div className="mb-3 flex h-32 w-full items-center justify-center rounded-lg border border-dashed border-line-strong text-[11px] text-stone">No photo</div>
+              )}
               <div className="mb-2 flex items-start justify-between gap-2">
                 <div>
-                  <div className="text-[13px] text-bone">{batch.materialType}</div>
-                  <div className="text-[11px] text-stone">{batch.code}</div>
+                  <div className="text-[13px] text-bone">{row.materialType}</div>
+                  <div className="text-[11px] text-stone">{row.code}</div>
                 </div>
-                <StatusBadge status={item.status} />
+                <StatusBadge status={row.status} />
               </div>
               <dl className="grid grid-cols-2 gap-y-1 text-[12px] text-stone">
-                <dt>Quantity</dt><dd className="text-right text-bone">{item.quantityKg}kg</dd>
-                <dt>Storage</dt><dd className="text-right text-bone">{item.storageLocation}</dd>
-                <dt>Contamination</dt><dd className="text-right text-bone">{batch.contaminationPct}%</dd>
+                <dt>Quantity</dt><dd className="text-right text-bone">{row.quantityKg}kg</dd>
+                <dt>Storage</dt><dd className="text-right text-bone">{row.storageLocation}</dd>
+                <dt>Contamination</dt><dd className="text-right text-bone">{row.contaminationLabel}</dd>
               </dl>
-              <SecondaryButton className="mt-3 w-full" onClick={() => show(`Viewing lifecycle history for ${batch.code}.`, 'info')}>View Details</SecondaryButton>
+              <div className="mt-3 flex gap-2">
+                <SecondaryButton className="flex-1" onClick={() => show(`Viewing lifecycle history for ${row.code}.`, 'info')}>View Details</SecondaryButton>
+                {row.scannedBatchId && LISTABLE.includes(row.status as BatchStatus) && (
+                  <PrimaryButton className="flex-1" onClick={() => setListingBatchId(row.scannedBatchId)}>List for Sale</PrimaryButton>
+                )}
+              </div>
             </Panel>
           ))}
         </div>
@@ -81,15 +133,18 @@ export default function InventoryPage() {
               </tr>
             </thead>
             <tbody>
-              {rows.map(({ item, batch }) => (
-                <tr key={item.id} className="border-b border-line last:border-0">
-                  <td className="px-4 py-3 text-stone">{batch.code}</td>
-                  <td className="px-4 py-3 text-bone">{batch.materialType}</td>
-                  <td className="px-4 py-3">{item.quantityKg}kg</td>
-                  <td className="px-4 py-3 text-stone">{item.storageLocation}</td>
-                  <td className="px-4 py-3"><StatusBadge status={item.status} /></td>
-                  <td className="px-4 py-3 text-right">
-                    <button onClick={() => show(`Viewing lifecycle history for ${batch.code}.`, 'info')} className="text-amber">View</button>
+              {rows.map((row) => (
+                <tr key={row.id} className="border-b border-line last:border-0">
+                  <td className="px-4 py-3 text-stone">{row.code}</td>
+                  <td className="px-4 py-3 text-bone">{row.materialType}</td>
+                  <td className="px-4 py-3">{row.quantityKg}kg</td>
+                  <td className="px-4 py-3 text-stone">{row.storageLocation}</td>
+                  <td className="px-4 py-3"><StatusBadge status={row.status} /></td>
+                  <td className="px-4 py-3 text-right space-x-3">
+                    {row.scannedBatchId && LISTABLE.includes(row.status as BatchStatus) && (
+                      <button onClick={() => setListingBatchId(row.scannedBatchId)} className="text-amber">List</button>
+                    )}
+                    <button onClick={() => show(`Viewing lifecycle history for ${row.code}.`, 'info')} className="text-stone hover:text-amber">View</button>
                   </td>
                 </tr>
               ))}
@@ -97,6 +152,8 @@ export default function InventoryPage() {
           </table>
         </Panel>
       )}
+
+      {listingBatchId && <NewListingModal batchId={listingBatchId} onClose={() => setListingBatchId(null)} />}
     </div>
   );
 }

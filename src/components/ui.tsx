@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { X } from 'lucide-react';
 
 export function Panel({ children, className = '' }: { children: ReactNode; className?: string }) {
   return <div className={`rounded-[14px] border border-line bg-panel p-5 ${className}`}>{children}</div>;
@@ -67,12 +68,13 @@ export function PageHeader({ eyebrow, title, action }: { eyebrow: string; title:
   );
 }
 
-export function PrimaryButton({ children, onClick, type = 'button', className = '' }: { children: ReactNode; onClick?: () => void; type?: 'button' | 'submit'; className?: string }) {
+export function PrimaryButton({ children, onClick, type = 'button', className = '', disabled = false }: { children: ReactNode; onClick?: () => void; type?: 'button' | 'submit'; className?: string; disabled?: boolean }) {
   return (
     <button
       type={type}
       onClick={onClick}
-      className={`rounded-lg bg-amber px-4 py-2.5 text-[13px] font-semibold text-[#161311] transition-colors hover:bg-amber-soft ${className}`}
+      disabled={disabled}
+      className={`rounded-lg bg-amber px-4 py-2.5 text-[13px] font-semibold text-[#161311] transition-colors hover:bg-amber-soft disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-amber ${className}`}
     >
       {children}
     </button>
@@ -87,5 +89,36 @@ export function SecondaryButton({ children, onClick, className = '' }: { childre
     >
       {children}
     </button>
+  );
+}
+
+export function Modal({ title, onClose, children, footer }: { title: string; onClose: () => void; children: ReactNode; footer?: ReactNode }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4" onClick={onClose}>
+      <div className="w-full max-w-md rounded-[16px] border border-line bg-panel-raised p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-5 flex items-center justify-between">
+          <h3 className="text-[16px] text-bone">{title}</h3>
+          <button onClick={onClose} className="text-stone hover:text-bone">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="space-y-4">{children}</div>
+        {footer && <div className="mt-6 flex justify-end gap-2.5">{footer}</div>}
+      </div>
+    </div>
+  );
+}
+
+export function FieldLabel({ children }: { children: ReactNode }) {
+  return <label className="mb-1.5 block text-[11px] uppercase tracking-wide text-stone">{children}</label>;
+}
+
+export function TextField(props: React.InputHTMLAttributes<HTMLInputElement>) {
+  const { className = '', ...rest } = props;
+  return (
+    <input
+      {...rest}
+      className={`w-full rounded-lg border border-line bg-white/[0.03] px-3 py-2.5 text-[13px] text-bone focus:border-amber/60 focus:outline-none ${className}`}
+    />
   );
 }

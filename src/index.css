@@ -41,6 +41,15 @@
     color-scheme: dark;
   }
 
+  select {
+    color-scheme: dark;
+  }
+
+  select option {
+    background-color: var(--color-panel);
+    color: var(--color-bone);
+  }
+
   body {
     margin: 0;
     background: var(--color-background);
