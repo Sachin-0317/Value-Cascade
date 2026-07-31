@@ -15,7 +15,48 @@ const scanSteps = ['Reading image metadata', 'Segmenting material regions', 'Cla
 
 /** Downscales an uploaded image and returns it as a base64 data URL — small enough
  *  for localStorage, and (unlike URL.createObjectURL) still valid after a page reload. */
-function toResizedDataUrl(file: File, maxWidth = 480, quality = 0.72): Promise<string> {
+interface VisualStats { brightness: number; colorVariance: number; textureScore: number }
+
+/** Real pixel-level analysis of the uploaded photo: average brightness, color variance
+ *  (proxy for mixed/contaminated material), and a simple edge/texture score. All 0-100. */
+function computeVisualStats(ctx: CanvasRenderingContext2D, width: number, height: number): VisualStats {
+  const { data } = ctx.getImageData(0, 0, width, height);
+  const luminances: number[] = [];
+  let sumLum = 0;
+  for (let i = 0; i < data.length; i += 4) {
+    const lum = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+    luminances.push(lum);
+    sumLum += lum;
+  }
+  const n = luminances.length;
+  const meanLum = sumLum / n;
+  const variance = luminances.reduce((s, l) => s + (l - meanLum) ** 2, 0) / n;
+  const stdDev = Math.sqrt(variance);
+
+  let edgeSum = 0;
+  let edgeCount = 0;
+  for (let y = 1; y < height; y++) {
+    for (let x = 1; x < width; x++) {
+      const idx = (y * width + x) * 4;
+      const idxUp = ((y - 1) * width + x) * 4;
+      const idxLeft = (y * width + (x - 1)) * 4;
+      const lum = 0.299 * data[idx] + 0.587 * data[idx + 1] + 0.114 * data[idx + 2];
+      const lumUp = 0.299 * data[idxUp] + 0.587 * data[idxUp + 1] + 0.114 * data[idxUp + 2];
+      const lumLeft = 0.299 * data[idxLeft] + 0.587 * data[idxLeft + 1] + 0.114 * data[idxLeft + 2];
+      edgeSum += Math.abs(lum - lumUp) + Math.abs(lum - lumLeft);
+      edgeCount++;
+    }
+  }
+  const avgEdge = edgeCount > 0 ? edgeSum / edgeCount : 0;
+
+  return {
+    brightness: Math.round(Math.min(100, (meanLum / 255) * 100)),
+    colorVariance: Math.round(Math.min(100, (stdDev / 80) * 100)),
+    textureScore: Math.round(Math.min(100, (avgEdge / 40) * 100)),
+  };
+}
+
+function toResizedDataUrl(file: File, maxWidth = 480, quality = 0.72): Promise<{ dataUrl: string; stats: VisualStats }> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = () => reject(new Error('Could not read file'));
@@ -30,7 +71,8 @@ function toResizedDataUrl(file: File, maxWidth = 480, quality = 0.72): Promise<s
         const ctx = canvas.getContext('2d');
         if (!ctx) return reject(new Error('Canvas not supported'));
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL('image/jpeg', quality));
+        const stats = computeVisualStats(ctx, canvas.width, canvas.height);
+        resolve({ dataUrl: canvas.toDataURL('image/jpeg', quality), stats });
       };
       img.src = reader.result as string;
     };
@@ -43,6 +85,7 @@ export default function AnalysisPage() {
   const navigate = useNavigate();
   const { addBatch } = useBatches();
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [visualStats, setVisualStats] = useState<VisualStats | null>(null);
   const [form, setForm] = useState<AnalysisInput & { sourceUnit: string; threadCount: string; fiberLength: string; location: string; notes: string }>({
     materialType: '', wasteCategory: wasteCategories[0], weightKg: 100, color: '', moisturePct: 6,
     contaminationPct: 5, fiberType: '', provenance: '' as ProvenanceLevel,
@@ -59,8 +102,9 @@ export default function AnalysisPage() {
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const dataUrl = await toResizedDataUrl(file);
+    const { dataUrl, stats } = await toResizedDataUrl(file);
     setImagePreview(dataUrl);
+    setVisualStats(stats);
   }
 
   async function runAnalysis(e: React.FormEvent) {
@@ -80,7 +124,7 @@ export default function AnalysisPage() {
     setStatus('scanning');
     setScanStep(0);
     const stepTimer = setInterval(() => setScanStep((s) => Math.min(s + 1, scanSteps.length - 1)), 420);
-    const res = await analysisService.analyze({ ...form, fiberLengthMm: Number(form.fiberLength) || undefined });
+    const res = await analysisService.analyze({ ...form, fiberLengthMm: Number(form.fiberLength) || undefined, visual: visualStats ?? undefined });
     clearInterval(stepTimer);
     setResult(res);
     setStatus('done');
@@ -90,6 +134,7 @@ export default function AnalysisPage() {
     setStatus('idle');
     setResult(null);
     setImagePreview(null);
+    setVisualStats(null);
     setForm((f) => ({ ...f, materialType: '', notes: '' }));
   }
 
@@ -181,6 +226,12 @@ export default function AnalysisPage() {
             </div>
             <p className="mt-3 text-[13px] leading-relaxed text-stone">{result.reasoning}</p>
 
+            {result.hfcf.visualCheck && (
+              <div className={`mt-3 rounded-lg border px-3.5 py-2.5 text-[12px] ${result.hfcf.visualCheck.agreesWithInput ? 'border-sage/30 bg-sage/[0.06] text-sage' : 'border-amber/30 bg-amber/[0.06] text-amber'}`}>
+                <span className="font-medium">Visual Cross-Check ({result.hfcf.visualCheck.visualContaminationEstimatePct}% estimated):</span> {result.hfcf.visualCheck.note}
+              </div>
+            )}
+
             <div className="mt-4 grid grid-cols-2 gap-3">
               <ResultTile label="CO₂ Saved" value={`${result.co2SavedKg} kg`} />
               <ResultTile label="Water Saved" value={`${result.waterSavedL.toLocaleString('en-IN')} L`} />
@@ -267,7 +318,18 @@ function NumberField({ label, value, onChange }: { label: string; value: number;
   return (
     <div>
       <label className="mb-1.5 block text-xs text-stone">{label}</label>
-      <input type="number" value={value} onChange={(e) => onChange(Number(e.target.value))} className="w-full rounded-lg border border-line bg-white/[0.03] px-3 py-2.5 text-sm text-bone focus:border-amber/60 focus:outline-none" />
+      <input
+        type="number"
+        value={value}
+        onChange={(e) => {
+          const raw = e.target.value;
+          const num = Number(raw) || 0;
+          const clean = String(num);
+          if (raw !== clean) e.target.value = clean; // force out stray leading zeros React would otherwise ignore
+          onChange(num);
+        }}
+        className="w-full rounded-lg border border-line bg-white/[0.03] px-3 py-2.5 text-sm text-bone focus:border-amber/60 focus:outline-none"
+      />
     </div>
   );
 }

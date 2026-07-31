@@ -22,6 +22,8 @@ export interface AnalysisInput {
   /** Must match a `level` in PROVENANCE_LEVELS. Defaults to 'Unknown Source'. */
   provenance?: ProvenanceLevel;
   fiberLengthMm?: number;
+  /** Real pixel-level signals extracted from the uploaded photo (0-100 scale). Optional so the service still works without a photo. */
+  visual?: { brightness: number; colorVariance: number; textureScore: number };
 }
 
 /** Extra HFCF-derived detail, additive to AnalysisResult so existing UI code keeps working untouched. */
@@ -34,6 +36,8 @@ export interface HfcfDetail {
   pathway: string;
   hubs: { name: string; region: string; keyFacts: string }[];
   productSuggestions: { product: string; suitableFibers: string[] }[];
+  /** Result of cross-checking the photo's real pixel signals against the entered contamination %. */
+  visualCheck?: { visualContaminationEstimatePct: number; agreesWithInput: boolean; note: string };
 }
 
 export type HfcfAnalysisResult = AnalysisResult & { hfcf: HfcfDetail };
