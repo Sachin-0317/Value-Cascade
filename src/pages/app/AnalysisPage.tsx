@@ -125,8 +125,8 @@ export default function AnalysisPage() {
 
   async function runAnalysis(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.materialType || !imagePreview) {
-      show('Add a batch photo and material type before scanning.', 'info');
+    if (!form.materialType) {
+      show('Add a material type before scanning.', 'info');
       return;
     }
     if (!form.fiberType || !fiberTypes.includes(form.fiberType)) {

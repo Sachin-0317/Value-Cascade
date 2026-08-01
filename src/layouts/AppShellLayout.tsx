@@ -3,7 +3,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, ScanLine, Boxes, Store, Tags, ClipboardList, Package,
   Truck, GitBranch, BarChart3, FileText, MessageSquare, Bell, User as UserIcon,
-  Settings, LogOut, Menu, X, ChevronDown,
+  Settings, LogOut, Menu, X, ChevronDown, Star,
 } from 'lucide-react';
 import { useAuth } from '@/store/AuthContext';
 import { moduleLabels, modulesForRole, roleLabels, type ModuleKey } from '@/data/roles';
@@ -24,6 +24,7 @@ const moduleIcons: Record<ModuleKey, React.ComponentType<{ size?: number }>> = {
   notifications: Bell,
   profile: UserIcon,
   settings: Settings,
+  feedback: Star,
 };
 
 export function AppShellLayout() {

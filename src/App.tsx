@@ -22,6 +22,7 @@ import LogisticsPage from '@/pages/app/LogisticsPage';
 import TraceabilityPage from '@/pages/app/TraceabilityPage';
 import AnalyticsPage from '@/pages/app/AnalyticsPage';
 import ReportsPage from '@/pages/app/ReportsPage';
+import FeedbackPage from '@/pages/app/FeedbackPage';
 import MessagesPage from '@/pages/app/MessagesPage';
 import NotificationsPage from '@/pages/app/NotificationsPage';
 import ProfilePage from '@/pages/app/ProfilePage';
@@ -69,6 +70,7 @@ export default function App() {
             <Route path="traceability" element={<TraceabilityPage />} />
             <Route path="analytics" element={<AnalyticsPage />} />
             <Route path="reports" element={<ReportsPage />} />
+            <Route path="feedback" element={<FeedbackPage />} />
             <Route path="messages" element={<MessagesPage />} />
             <Route path="notifications" element={<NotificationsPage />} />
             <Route path="profile" element={<ProfilePage />} />

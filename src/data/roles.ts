@@ -35,7 +35,7 @@ export const roleDescriptions: Record<Role, string> = {
 export type ModuleKey =
   | 'dashboard' | 'analysis' | 'inventory' | 'marketplace' | 'listings'
   | 'procurement' | 'orders' | 'logistics' | 'traceability' | 'analytics'
-  | 'reports' | 'messages' | 'notifications' | 'profile' | 'settings';
+  | 'reports' | 'messages' | 'notifications' | 'profile' | 'settings' | 'feedback';
 
 export const moduleLabels: Record<ModuleKey, string> = {
   dashboard: 'Dashboard',
@@ -53,6 +53,7 @@ export const moduleLabels: Record<ModuleKey, string> = {
   notifications: 'Notifications',
   profile: 'Profile',
   settings: 'Settings',
+  feedback: 'Feedback',
 };
 
 // Which sidebar modules each role can access. Dashboard/messages/notifications/
@@ -76,7 +77,7 @@ export const roleModules: Record<Role, ModuleKey[]> = {
   admin: ['analysis', 'inventory', 'marketplace', 'listings', 'procurement', 'orders', 'logistics', 'traceability', 'analytics', 'reports'],
 };
 
-const alwaysOn: ModuleKey[] = ['dashboard', 'messages', 'notifications', 'profile', 'settings'];
+const alwaysOn: ModuleKey[] = ['dashboard', 'messages', 'notifications', 'feedback', 'profile', 'settings'];
 
 export function modulesForRole(role: Role): ModuleKey[] {
   return [alwaysOn[0], ...(roleModules[role] ?? []), ...alwaysOn.slice(1)];
