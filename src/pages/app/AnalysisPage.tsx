@@ -205,7 +205,7 @@ export default function AnalysisPage() {
             <form onSubmit={runAnalysis} className="grid grid-cols-2 gap-3.5">
               <TextField label="Material type" value={form.materialType} onChange={(v) => update('materialType', v)} placeholder="e.g. Cotton Cutting Scrap" full />
               <SelectField label="Waste category" value={form.wasteCategory} onChange={(v) => update('wasteCategory', v)} options={wasteCategories} />
-<SelectField label="Fiber type" value={form.fiberType ?? ''} onChange={(v) => update('fiberType', v)} options={['Select fiber type…', ...fiberTypes]} />
+              <SelectField label="Fiber type" value={form.fiberType ?? ''} onChange={(v) => update('fiberType', v)} options={['Select fiber type…', ...fiberTypes]} />
               <SelectField label="Provenance" value={form.provenance ?? ''} onChange={(v) => update('provenance', v as ProvenanceLevel)} options={['Select provenance…', ...provenanceLevels]} />
               <NumberField label="Weight (kg)" value={form.weightKg} onChange={(v) => update('weightKg', v)} />
               <TextField label="Source unit" value={form.sourceUnit} onChange={(v) => update('sourceUnit', v)} placeholder="Cutting Floor 2" />
@@ -273,8 +273,6 @@ export default function AnalysisPage() {
                 </div>
               );
             })()}
-
-            <div className="mt-4 grid grid-cols-2 gap-3">
 
             <div className="mt-4 grid grid-cols-2 gap-3">
               <ResultTile label="CO₂ Saved" value={`${result.co2SavedKg} kg`} />
